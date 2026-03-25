@@ -1,0 +1,22 @@
+PHẦN MỀN THUYẾT MINH VIDEO TỪ TIẾNG ANH VỀ TIẾNG VIỆT.
+
+MÔ TẢ: đây là 1 phần mền lồng tiếng video tư động. người dùng sẽ chuyển vào 1 video, dùng ai để nghe và đưa ra sub tiếng anh, chuyển sub tiếng anh về tiếng việt, sau đó dùng giọng AI để đọc những câu tiếng việt đã được dịch trước đó, hạ âm lượng giọng góc video xuống mà không ảnh hướng đến âm nhạc hay hiệu ứng âm thanh của video. cuối cùng ghép câu tiếng việt vào đúng vị trí trong video để đưa ra 1 video lòng tiếng việt hoàn chỉnh.
+
+CÁCH TƯƠNG TÁC: 1 BOX ĐỒ HỌA ĐƠN GIÃN(FLAST API...)
+
+MVP: dùng AI nghe tiếng anh trong video và đưa về sub tiếng anh kèm thời gia bắt đầu của câu đó -> hạ âm giọng gốc trong video xuống mà không ảnh hướng đến âm nhạc hay hiệu ứng âm thanh của video -> dùng AI dịch những câu tiếng anh về tiếng việt -> dùng AI đọc những câu tiếng việt lên -> những đoạn audio tiếng việt đó vào đúng thời gian của câu đó trong video.
+
+Speech-to-Text (STT): faster_whisper với large-v3
+Audio Separation (Tách âm thanh): Ultimate Vocal Remover - UVR5
+Translation (Dịch thuật): Local LLM(qwen2.5:7b) bằng Ollama
+Text-to-Speech (TTS): edge-tts (Microsoft Edge Neural TTS)
+Video/Audio Processing (Ghép nối): MoviePy 
+
+
+USER FLOW:
+mở chương trình -> chọn video -> chạy chương trình -> mở video lên
+
+LƯU TRỬ DỮ LIỆU:
+lưu tại máy chạy
+
+tạo virtual environment:
