@@ -56,10 +56,10 @@ def format_timestamp(seconds: float) -> str:
     CHỨC NĂNG: Chuyển số giây (float) thành định dạng phụ đề SRT
     DÙNG KHI: Tạo file phụ đề .srt (được gọi bởi hàm generate_srt)
     """
-    if second < 0:
+    if seconds < 0:
         raise ValueError("Thời gian không được âm")
     hours = int(seconds // 3600)                # 65.5 // 3600 = 0 (giờ)
-    minutes = int((seconds // 3600) // 60)      # 65.5 % 3600 = 65.5, 65.5 // 60 = 1 (phút)
+    minutes = int((seconds % 3600) // 60)      # 65.5 % 3600 = 65.5, 65.5 // 60 = 1 (phút)
     secs = int(seconds % 60)                    # 65.5 % 60 = 5 (giây)
     millis = int(round((seconds % 1) * 1000))   # 0.5 * 1000 = 500 (mili-giây)
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
@@ -76,7 +76,7 @@ def generate_srt(segment: list, output_path: str) -> str:
         for i, seg in enumerate(segment, 1):
             start = format_timestamp(seg.start_time)
             end = format_timestamp(seg.end_time)
-            text = seg.translated_text if seg.translated else seg.original_text  #      ưu tiên text đã dịch, nếu chưa dịch thì dùng text gốc
+            text = seg.translated_text if seg.translated_text else seg.original_text  #      ưu tiên text đã dịch, nếu chưa dịch thì dùng text gốc
             f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
     return output_path
 

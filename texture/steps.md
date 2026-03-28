@@ -131,7 +131,7 @@ def format_timestamp(seconds: float) -> str:
 ```python
 def generate_srt(segment: list, output_path: str) -> str:
     if not segment:
-        raise ValueError("Danh sách segments rỗng")
+        raise ValueError("Danh sách segment rỗng")
     with open(output_path, "w", encoding="utf-8") as f:
         for i, seg in enumerate(segment, 1):
             start = format_timestamp(seg.start_time)
