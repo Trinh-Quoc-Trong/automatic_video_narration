@@ -1,8 +1,10 @@
 from dataclasses import dataclass
-from logging import Logger
-import select
+from multiprocessing.sharedctypes import Value
 from typing import List
 from moviepy.editor import VideoFileClip # dùng để cắt ghép video
+import os
+import sys
+
 
 #  --- DATA CLASSES ---
 @dataclass
@@ -25,11 +27,61 @@ class MediaProcessor():
             audio.close()
             video.close()
         except Exception as e:
-            print("Error:" + e)
+            print(f"Error: {e}")
     
     def merge_audio_to_video(self, video_path: str, new_audio_path: str, output_path: str):
         # TODO: Ghép audio hoàn chỉnh vào video
         pass
+
+
+
+def validate_video_file(path: str) -> bool:
+    """
+    CHỨC NĂNG: Kiểm tra file video đầu vào có hợp lệ không
+    DÙNG KHI: Gọi trong main() TRƯỚC KHI chạy pipeline, để chặn lỗi sớm
+    """
+    valid_extensions = {".mp4", ".avi", ".mkv", ".mov", ".webm"}
+    if not os.path.isfile(path):
+        raise ValueError(f"File không tồn tại: {path}")
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in valid_extensions:
+        raise ValueError(f"Định dạng file không hổi trợ: {ext}")
+    if os.path.getsize(path) == 0:
+        raise ValueError("file rỗng")
+    return True
+
+
+def format_timestamp(seconds: float) -> str:
+    """
+    CHỨC NĂNG: Chuyển số giây (float) thành định dạng phụ đề SRT
+    DÙNG KHI: Tạo file phụ đề .srt (được gọi bởi hàm generate_srt)
+    """
+    if second < 0:
+        raise ValueError("Thời gian không được âm")
+    hours = int(seconds // 3600)                # 65.5 // 3600 = 0 (giờ)
+    minutes = int((seconds // 3600) // 60)      # 65.5 % 3600 = 65.5, 65.5 // 60 = 1 (phút)
+    secs = int(seconds % 60)                    # 65.5 % 60 = 5 (giây)
+    millis = int(round((seconds % 1) * 1000))   # 0.5 * 1000 = 500 (mili-giây)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+
+def generate_srt(segment: list, output_path: str) -> str:
+    """
+    CHỨC NĂNG: Tạo file phụ đề .srt từ danh sách SubtitleSegment
+    DÙNG KHI: Sau khi dịch xong, xuất file phụ đề để người dùng xem
+    """
+    if not segment:
+        raise ValueError("Danh sách segments rỗng")
+    with open(output_path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segment, 1):
+            start = format_timestamp(seg.start_time)
+            end = format_timestamp(seg.end_time)
+            text = seg.translated_text if seg.translated else seg.original_text  #      ưu tiên text đã dịch, nếu chưa dịch thì dùng text gốc
+            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+    return output_path
+
+
+    
 
 
 class AudioSeparator():
@@ -79,6 +131,7 @@ class DubbingApp():
     def process_video(self, input_video_path: str, output_video_path: str):
         print("1. Đang tách âm thanh...")
         audio_path = self.media_processor.extact_audio(input_video_path)
+        
         
         print("2. Đang tách giọng nói và nhạc nền...")
         vocal_path, bgm_path = self.separator.separate(audio_path)

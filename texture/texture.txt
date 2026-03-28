@@ -20,3 +20,58 @@ LƯU TRỬ DỮ LIỆU:
 lưu tại máy chạy
 
 tạo virtual environment:
+
+
+KIẾN TRÚC PIPELINE (7 BƯỚC):
+Video gốc
+  → [1] Tách audio ra khỏi video (MoviePy)
+  → [2] Tách giọng nói (vocal) & nhạc nền (demucs)
+  → [3] AI nghe giọng nói → text tiếng Anh + timestamp (faster-whisper large-v3)
+  → [4] Dịch text tiếng Anh → tiếng Việt (Ollama + qwen2.5:7b)
+  → [5] AI đọc text tiếng Việt thành audio (edge-tts)
+  → [6] Mix audio tiếng Việt + nhạc nền gốc (pydub)
+  → [7] Ghép audio mới vào video gốc → xuất video hoàn chỉnh (MoviePy)
+
+
+TECH STACK (CẬP NHẬT):
+- Speech-to-Text (STT): faster_whisper với large-v3
+- Audio Separation: demucs (Meta Research) -- thay UVR5 vì dễ tích hợp Python hơn
+- Translation: Local LLM (qwen2.5:7b) bằng Ollama
+- Text-to-Speech (TTS): edge-tts (Microsoft Edge Neural TTS)
+- Video/Audio Processing: MoviePy + pydub
+- Testing: pytest
+
+
+DANH SÁCH CLASS VÀ CHỨC NĂNG:
+- SubtitleSegment (dataclass): lưu thông tin 1 đoạn phụ đề (start_time, end_time, original_text, translated_text, audio_path)
+- MediaProcessor: tách audio từ video (bước 1) & ghép audio vào video (bước 7)
+- AudioSeparator: tách vocal và nhạc nền bằng demucs (bước 2)
+- SpeechRecognizer: chuyển giọng nói thành text + timestamp bằng faster-whisper (bước 3)
+- Translator: dịch tiếng Anh sang tiếng Việt bằng Ollama (bước 4)
+- VoiceSynthesizer: tạo giọng đọc tiếng Việt bằng edge-tts (bước 5)
+- AudioMixer: mix giọng đọc mới với nhạc nền gốc bằng pydub (bước 6)
+- DubbingApp: nhạc trưởng điều phối toàn bộ pipeline
+
+
+3 HÀM TOP-LEVEL (YÊU CẦU CS50P):
+CS50P yêu cầu ít nhất 3 hàm nằm ngoài class (top-level functions) và phải test được:
+1. validate_video_file(path) -- kiểm tra file video đầu vào có hợp lệ không
+2. format_timestamp(seconds) -- chuyển số giây thành định dạng phụ đề SRT "HH:MM:SS,mmm"
+3. generate_srt(segments, output_path) -- tạo file phụ đề .srt từ danh sách segments
+
+
+CẤU TRÚC FILE DỰ ÁN:
+project/
+├── project.py          # File chính: top-level functions + classes + main()
+├── test_project.py     # Tests cho các hàm top-level
+├── requirements.txt    # Danh sách dependencies
+├── README.md           # Mô tả dự án, hướng dẫn cài đặt & sử dụng
+├── .gitignore          # Bỏ qua venv, __pycache__, file media
+└── texture/
+    └── texture.txt     # Tài liệu thiết kế dự án
+
+
+YÊU CẦU HỆ THỐNG:
+- Python 3.10+
+- FFmpeg (cài sẵn trên máy, MoviePy cần dùng)
+- Ollama đang chạy + đã pull model qwen2.5:7b

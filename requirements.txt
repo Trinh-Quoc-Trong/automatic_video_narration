@@ -1,0 +1,7 @@
+moviepy==1.0.3
+demucs
+faster-whisper
+edge-tts
+pydub
+ollama
+pytest
