@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from multiprocessing.sharedctypes import Value
 from typing import List
-from moviepy.editor import VideoFileClip, AudioFileClip # dùng để cắt ghép video
+from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
 import os
 import sys
 
@@ -36,7 +36,10 @@ class MediaProcessor():
         try: 
             video = VideoFileClip(video_path)
             new_audio = AudioFileClip(new_audio_path)
-            video_final = video.set_audio(new_audio)
+            if hasattr(video, "with_audio"):
+                video_final = video.with_audio(new_audio)  # MoviePy v2
+            else:
+                video_final = video.set_audio(new_audio)   # MoviePy v1
             video_final.write_videofile(output_path, logger=None)
             video.close()
             new_audio.close()
