@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from multiprocessing.sharedctypes import Value
 from typing import List
-from moviepy.editor import VideoFileClip # dùng để cắt ghép video
+from moviepy.editor import VideoFileClip, AudioFileClip # dùng để cắt ghép video
 import os
 import sys
 
@@ -23,15 +23,28 @@ class MediaProcessor():
         try:
             video = VideoFileClip(video_path)
             audio = video.audio
-            audio.write_audiofile(output_audio_path, Logger=None)
+            audio.write_audiofile(output_audio_path, logger=None)
             audio.close()
             video.close()
         except Exception as e:
-            print(f"Error: {e}")
+            raise RuntimeError(f"Error: {e}")
+        
+        return output_audio_path
     
     def merge_audio_to_video(self, video_path: str, new_audio_path: str, output_path: str):
         # TODO: Ghép audio hoàn chỉnh vào video
-        pass
+        try: 
+            video = VideoFileClip(video_path)
+            new_audio = AudioFileClip(new_audio_path)
+            video_final = video.set_audio(new_audio)
+            video_final.write_videofile(output_path, logger=None)
+            video.close()
+            new_audio.close()
+            video_final.close()
+            
+        except Exception as e:
+            raise RuntimeError(f"Error: {e}")
+            
 
 
 

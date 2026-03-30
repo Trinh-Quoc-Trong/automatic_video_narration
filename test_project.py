@@ -61,8 +61,6 @@ def test_generate_srt_success(tmp_path):
     # 4. Kiểm chứng (Assert)
     assert os.path.isfile(result)
     
-    
-    text_encoding = ""
     with open(result, 'r', encoding= "utf-8") as f:
         text_encoding = f.read()
     
@@ -91,10 +89,8 @@ def test_generate_srt_lack_translated_text(tmp_path):
     # 4. Kiểm chứng (Assert)
     assert os.path.isfile(result)
     
-    
     with open(result, 'r', encoding= "utf-8") as f:
         context = f.read()
-    
     
     assert context == "1\n00:00:01,500 --> 00:00:03,500\nhello world\n\n"
 
@@ -114,6 +110,18 @@ def test_generate_srt_lack_end_time(tmp_path):
 
     with pytest.raises(ValueError):
         project.generate_srt(fake_segments, str(output_file))
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # pytest test_project.py -v
