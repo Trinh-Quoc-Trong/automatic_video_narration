@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from multiprocessing.sharedctypes import Value
+import subprocess
 from typing import List
 from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
 import os
+from config import  ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
 import sys
 
 
@@ -96,7 +98,7 @@ def generate_srt(segment: list, output_path: str) -> str:
             f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
     return output_path
 
-
+    
     
 
 
@@ -104,7 +106,30 @@ class AudioSeparator():
     """Tách vocal (giọng nói) và background music (nhạc nền)"""
     def separate(self, audio_path: str) -> tuple[str, str]:
         # TODO: Trả về (vocal_path, background_music_path)
-        pass
+        out_dir = os.path.join(TEMP_DIR, "separated")
+        try: 
+            # Dùng thư viện subprocess để "bấm nốt" chạy lệnh terminal y hệt như bạn vừa gõ tay
+            subprocess.run(
+                ["python", "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
+            )
+            
+            # Lấy tên file gốc (ví dụ: "test_audio.wav" -> "test_audio")
+            filename = os.path.splitext(os.path.basename(audio_path))[0]
+            
+            # Khớp đúng với đường dẫn mà Demucs tự động tạo ra
+            vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "vocals.wav")
+            bgm_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "no_vocals.wav")
+            print(f"\n\n\n{vocal_path}\n\n\n")
+            
+            if not os.path.isfile(vocal_path) or not os.path.isfile(bgm_path):
+                raise FileNotFoundError("Demucs chạy xong nhưng không tìm thấy file output!")
+
+            return vocal_path, bgm_path
+        
+        
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.decode("utf-8", errors = "ignore")
+            raise RuntimeError(f"Lỗi tạch audio(Demucs): {error_msg}")
 
 
 class SpeechRecognizer():

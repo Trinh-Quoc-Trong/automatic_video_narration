@@ -1,7 +1,8 @@
-moviepy==1.0.3
+moviepy>2
 demucs
 faster-whisper
 edge-tts
 pydub
 ollama
 pytest
+numpy<2
