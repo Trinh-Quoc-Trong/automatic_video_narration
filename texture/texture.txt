@@ -28,7 +28,7 @@ Video gốc
   → [2] Tách giọng nói (vocal) & nhạc nền (demucs)
   → [3] AI nghe giọng nói → text tiếng Anh + timestamp (faster-whisper large-v3)
   → [4] Dịch text tiếng Anh → tiếng Việt (Ollama + qwen2.5:7b)
-  → [5] AI đọc text tiếng Việt thành audio (edge-tts)
+  → [5] AI đọc text tiếng Việt thành audio (VieNeu)
   → [6] Mix audio tiếng Việt + nhạc nền gốc (pydub)
   → [7] Ghép audio mới vào video gốc → xuất video hoàn chỉnh (MoviePy)
 

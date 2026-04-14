@@ -1,11 +1,16 @@
+import os
+import sys
+# THÊM DÒNG NÀY VÀO ĐỂ SỬA LỖI ĐỤNG ĐỘ OPENMP
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 from dataclasses import dataclass
 from multiprocessing.sharedctypes import Value
 import subprocess
 from typing import List
 from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
-import os
+
+from numpy import divide
 from config import  ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
-import sys
 
 
 #  --- DATA CLASSES ---
@@ -119,7 +124,6 @@ class AudioSeparator():
             # Khớp đúng với đường dẫn mà Demucs tự động tạo ra
             vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "vocals.wav")
             bgm_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "no_vocals.wav")
-            print(f"\n\n\n{vocal_path}\n\n\n")
             
             if not os.path.isfile(vocal_path) or not os.path.isfile(bgm_path):
                 raise FileNotFoundError("Demucs chạy xong nhưng không tìm thấy file output!")
@@ -135,8 +139,28 @@ class AudioSeparator():
 class SpeechRecognizer():
     """Chuyển đổi âm thanh thành văn bản kèm thời gian (STT)"""
     def transcribe(self, vocal_audio_path: str) -> List[SubtitleSegment]:
-        pass
+        # Import cục bộ để tránh ngốn RAM khi chưa dùng đến
+        from faster_whisper import WhisperModel
 
+        model = WhisperModel("large-v3-turbo", device = "auto", compute_type = "float16")
+        
+        segments_raw, info = model.transcribe(
+            vocal_audio_path,
+            beam_size=5,
+            language="en",  # Ép AI hiểu đây là tiếng Anh để dịch chuẩn xác hơn
+            vad_filter=True # Tính năng lọc khoảng lặng
+        )
+        
+        segments = []
+        for seg in segments_raw:
+            # Đóng gói từng câu AI nghe được vào "khuôn" SubtitleSegment
+            segments.append(SubtitleSegment(
+                start_time=seg.start,
+                end_time= seg.end,
+                original_text= seg.text.strip()
+            ))
+        
+        return segments
 
 class Translator():
     """Dịch văn bản"""

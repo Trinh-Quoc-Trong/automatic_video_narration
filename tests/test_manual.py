@@ -1,6 +1,8 @@
 import sys
 import os
 
+from sympy import Segment
+
 # them path để gọi project
 file_ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if file_ not in sys.path:
@@ -27,16 +29,45 @@ if file_ not in sys.path:
 # print("✅Ghep thanh cong! Hay kiem tra thu muc output/")
 
 
-print("\n--- TEST AI DEMUCS ---")
+# print("\n--- TEST AI DEMUCS ---")
 
-from project import AudioSeparator
+# from project import AudioSeparator
 
-input_test_audio = os.path.join( file_, r"tests\temp\test_audio.wav")
+# input_test_audio = os.path.join( file_, r"tests\temp\test_audio.wav")
 
-aus = AudioSeparator()
+# aus = AudioSeparator()
 
-vocal, bgm = aus.separate(input_test_audio)
+# vocal, bgm = aus.separate(input_test_audio)
 
-print("✅ Đã tách xong!")
-print(f"👉 File giọng nói nằm ở: {vocal}")
-print(f"👉 File nhạc nền nằm ở: {bgm}")
+# print("✅ Đã tách xong!")
+# print(f"👉 File giọng nói nằm ở: {vocal}")
+# print(f"👉 File nhạc nền nằm ở: {bgm}")
+
+
+
+
+
+
+# ======================================================
+# --- ĐANG TEST: AI FASTER-WHISPER (STT) ---
+# ======================================================
+
+print("\n--- TEST AI FASTER-WHISPER (STT) ---")
+
+from config import TEMP_DIR
+from project import SpeechRecognizer
+
+vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", "test_audio", "vocals.wav")
+rec = SpeechRecognizer()
+segment = rec.transcribe(vocal_path)
+print("\n✅ AI ĐÃ NGHE XONG! KẾT QUẢ:")
+
+for s in segment:
+    print(f"[{s.start_time: .1f}s - {s.end_time: .1f}s] {s.original_text}")
+    
+
+
+
+
+
+
