@@ -3,21 +3,17 @@ from edge_tts import communicate
 import os
 import sys
 import webbrowser
-# THÊM DÒNG NÀY VÀO ĐỂ SỬA LỖI ĐỤNG ĐỘ OPENMP
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # fix OpenMP conflict
 
 from dataclasses import dataclass
-
 import subprocess
 from typing import List
-from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
+from moviepy import VideoFileClip, AudioFileClip
 import re
-
-from config import  ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
+from config import ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
 import shutil
 
 
-#  --- DATA CLASSES ---
 @dataclass
 class SubtitleSegment():
     start_time: float
@@ -25,12 +21,11 @@ class SubtitleSegment():
     original_text: str
     translated_text: str = ""
     audio_path: str = ""
-    
-# --- SERVICE CLASSES ---
+
+
 class MediaProcessor():
-    """Xử lý việc tách âm thanh từ video và ghép âm thanh vào video"""
+    """Extract audio from video and merge new audio back"""
     def extact_audio(self, video_path: str, output_audio_path: str) -> str:
-        # TODO: Dùng FFmpeg/MoviePy tách audio
         try:
             video = VideoFileClip(video_path)
             audio = video.audio
@@ -39,175 +34,145 @@ class MediaProcessor():
             video.close()
         except Exception as e:
             raise RuntimeError(f"Error: {e}")
-        
         return output_audio_path
-    
+
     def merge_audio_to_video(self, video_path: str, new_audio_path: str, output_path: str):
-        # TODO: Ghép audio hoàn chỉnh vào video
-        try: 
+        try:
             video = VideoFileClip(video_path)
             new_audio = AudioFileClip(new_audio_path)
+            # MoviePy v2 changed set_audio -> with_audio
             if hasattr(video, "with_audio"):
-                video_final = video.with_audio(new_audio)  # MoviePy v2
+                video_final = video.with_audio(new_audio)
             else:
-                video_final = video.set_audio(new_audio)   # MoviePy v1
+                video_final = video.set_audio(new_audio)
             video_final.write_videofile(output_path, logger=None)
             video.close()
             new_audio.close()
             video_final.close()
-            
         except Exception as e:
             raise RuntimeError(f"Error: {e}")
-            
+
 
 class SetupManager:
-    """Tự động kiểm tra và thiết lập môi trường cho người dùng mới"""
+    """Check if Ollama + model are installed, guide user if not"""
     @staticmethod
     def ensure_model_ready(model_name: str):
-        print(f"--- Đang kiểm tra tài nguyên hệ thống ---")
+        print("--- Checking system resources ---")
         try:
-            # Kiểm tra danh sách model hiện có trong Ollama
-            result = subprocess.run(["ollama","list"], capture_output = True, text = True)
-            
+            result = subprocess.run(["ollama", "list"], capture_output=True, text=True)
             if model_name not in result.stdout:
-                print(f"⚠️ Không tìm thấy {model_name}. Đang tự động tải về (lần đầu)...")
-                subprocess.run(["ollama", 'pull', model_name], check=True)
-                print(f"✅ Tải thành công {model_name}!")
+                print(f"Model {model_name} not found. Downloading...")
+                subprocess.run(["ollama", "pull", model_name], check=True)
+                print(f"Done! {model_name} downloaded.")
             else:
-                print(f"✅ Model {model_name} đã sẵn sàng.")
-                
-                
-        except FileNotFoundError:
-            print("\n❌ HỆ THỐNG THIẾU PHẦN MỀM LÕI!")
-            print("Máy tính của bạn chưa được cài đặt Ollama.")
-            print("Đang tự động mở trình duyệt để bạn tải về...")
-            # Tự động bật Chrome/Edge truy cập thẳng vào trang tải Ollama
-            webbrowser.open("https://ollama.com/download")          
-            raise RuntimeError(
-                "\n--- HƯỚNG DẪN CÀI ĐẶT ---\n"
-                "1. Hãy tải và cài đặt Ollama từ trang web vừa mở.\n"
-                "2. QUAN TRỌNG: Cài xong, hãy TẮT và MỞ LẠI VS Code (hoặc Terminal) này.\n"
-                "3. Chạy lại lệnh python project.py để tiếp tục.\n"
-                "---------------------------"
-                )
+                print(f"Model {model_name} ready.")
 
+        except FileNotFoundError:
+            print("\nOllama is not installed!")
+            print("Opening download page...")
+            webbrowser.open("https://ollama.com/download")
+            raise RuntimeError(
+                "\n--- SETUP GUIDE ---\n"
+                "1. Download and install Ollama from the page that just opened.\n"
+                "2. Close and reopen your terminal after installing.\n"
+                "3. Run python project.py again.\n"
+                "-------------------"
+            )
 
 
 def validate_video_file(path: str) -> bool:
-    """
-    CHỨC NĂNG: Kiểm tra file video đầu vào có hợp lệ không
-    DÙNG KHI: Gọi trong main() TRƯỚC KHI chạy pipeline, để chặn lỗi sớm
-    """
+    """Check if the video file is valid before processing"""
     valid_extensions = {".mp4", ".avi", ".mkv", ".mov", ".webm"}
     if not os.path.isfile(path):
-        raise ValueError(f"File không tồn tại: {path}")
+        raise ValueError(f"File does not exist: {path}")
     ext = os.path.splitext(path)[1].lower()
     if ext not in valid_extensions:
-        raise ValueError(f"Định dạng file không hổi trợ: {ext}")
+        raise ValueError(f"Unsupported format: {ext}")
     if os.path.getsize(path) == 0:
-        raise ValueError("file rỗng")
+        raise ValueError("File is empty")
     return True
 
 
 def format_timestamp(seconds: float) -> str:
-    """
-    CHỨC NĂNG: Chuyển số giây (float) thành định dạng phụ đề SRT
-    DÙNG KHI: Tạo file phụ đề .srt (được gọi bởi hàm generate_srt)
-    """
+    """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)"""
     if seconds < 0:
-        raise ValueError("Thời gian không được âm")
-    hours = int(seconds // 3600)                # 65.5 // 3600 = 0 (giờ)
-    minutes = int((seconds % 3600) // 60)      # 65.5 % 3600 = 65.5, 65.5 // 60 = 1 (phút)
-    secs = int(seconds % 60)                    # 65.5 % 60 = 5 (giây)
-    millis = int(round((seconds % 1) * 1000))   # 0.5 * 1000 = 500 (mili-giây)
+        raise ValueError("Timestamp must not be negative")
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int(round((seconds % 1) * 1000))
     return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 
 def generate_srt(segment: list, output_path: str) -> str:
-    """
-    CHỨC NĂNG: Tạo file phụ đề .srt từ danh sách SubtitleSegment
-    DÙNG KHI: Sau khi dịch xong, xuất file phụ đề để người dùng xem
-    """
+    """Write .srt subtitle file from a list of SubtitleSegments"""
     if not segment:
-        raise ValueError("Danh sách segments rỗng")
+        raise ValueError("Segment list is empty")
     with open(output_path, "w", encoding="utf-8") as f:
         for i, seg in enumerate(segment, 1):
             start = format_timestamp(seg.start_time)
             end = format_timestamp(seg.end_time)
-            text = seg.translated_text if seg.translated_text else seg.original_text  #      ưu tiên text đã dịch, nếu chưa dịch thì dùng text gốc
+            # use translated text if available, otherwise keep original
+            text = seg.translated_text if seg.translated_text else seg.original_text
             f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
     return output_path
 
-    
-    
-
 
 class AudioSeparator():
-    """Tách vocal (giọng nói) và background music (nhạc nền)"""
+    """Use Demucs to split vocals and background music"""
     def separate(self, audio_path: str) -> tuple[str, str]:
-        # TODO: Trả về (vocal_path, background_music_path)
         out_dir = os.path.join(TEMP_DIR, "separated")
-        try: 
-            # Dùng thư viện subprocess để "bấm nốt" chạy lệnh terminal y hệt như bạn vừa gõ tay
+        try:
+            # sys.executable so it uses the venv python, not system python
             subprocess.run(
-                [sys.executable , "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
-                check= True
+                [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
+                check=True
             )
-            
-            # Lấy tên file gốc (ví dụ: "test_audio.wav" -> "test_audio")
             filename = os.path.splitext(os.path.basename(audio_path))[0]
-            
-            # Khớp đúng với đường dẫn mà Demucs tự động tạo ra
             vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "vocals.wav")
             bgm_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "no_vocals.wav")
-            
-            if not os.path.isfile(vocal_path) or not os.path.isfile(bgm_path):
-                raise FileNotFoundError("Demucs chạy xong nhưng không tìm thấy file output!")
 
+            if not os.path.isfile(vocal_path) or not os.path.isfile(bgm_path):
+                raise FileNotFoundError("Demucs finished but output files are missing!")
             return vocal_path, bgm_path
-        
-        
+
         except subprocess.CalledProcessError as e:
-            error_msg = e.stderr.decode("utf-8", errors = "ignore")
-            raise RuntimeError(f"Lỗi tạch audio(Demucs): {error_msg}")
+            error_msg = e.stderr.decode("utf-8", errors="ignore")
+            raise RuntimeError(f"Demucs error: {error_msg}")
 
 
 class SpeechRecognizer():
-    """Chuyển đổi âm thanh thành văn bản kèm thời gian (STT)"""
+    """Transcribe audio to text with timestamps using Whisper"""
     def transcribe(self, vocal_audio_path: str) -> List[SubtitleSegment]:
-        # Import cục bộ để tránh ngốn RAM khi chưa dùng đến
-        from faster_whisper import WhisperModel
+        from faster_whisper import WhisperModel  # heavy import, only load when needed
 
-        model = WhisperModel("large-v3-turbo", device = "auto", compute_type = "float16")
-        
+        model = WhisperModel("large-v3-turbo", device="auto", compute_type="float16")
         segments_raw, info = model.transcribe(
             vocal_audio_path,
             beam_size=5,
-            language="en",  # Ép AI hiểu đây là tiếng Anh để dịch chuẩn xác hơn
-            vad_filter=True # Tính năng lọc khoảng lặng
+            language="en",
+            vad_filter=True
         )
-        
+
         segments = []
         for seg in segments_raw:
-            # Đóng gói từng câu AI nghe được vào "khuôn" SubtitleSegment
             segments.append(SubtitleSegment(
                 start_time=seg.start,
-                end_time= seg.end,
-                original_text= seg.text.strip()
+                end_time=seg.end,
+                original_text=seg.text.strip()
             ))
-        
         return segments
 
+
 class Translator():
-    """Dịch văn bản"""
-    def __init__(self, model_name : str):
-        self.model_name = model_name 
+    """Translate English text to Vietnamese using local Ollama model"""
+    def __init__(self, model_name: str):
+        self.model_name = model_name
 
     def translate_segments(self, segments: List[SubtitleSegment]) -> List[SubtitleSegment]:
-        # TODO: Dịch văn bản bằng Gemma 4 (Local)
-        print(f"  [AI] Đang nhờ Gemma 4 (e4b) dịch {len(segments)} câu sang tiếng Việt...")
-        import ollama # Import nội bộ để tiết kiệm RAM khi khởi động
-        
+        print(f"  Translating {len(segments)} segments...")
+        import ollama
+
         for seg in segments:
             response = ollama.chat(model=self.model_name, messages=[
                 {
@@ -219,181 +184,136 @@ class Translator():
                     "content": seg.original_text
                 }
             ])
-            
             raw_text = response["message"]["content"].strip()
-
-            # Lọc bỏ nội dung suy nghĩ <think>...</think> để tránh đưa vào video
+            # some models wrap output in <think> tags, strip those out
             clean_text = re.sub(r"<think>.*?</think>", '', raw_text, flags=re.DOTALL).strip()
-            
             seg.translated_text = clean_text
-        
+
         return segments
-        
 
 
 class VoiceSynthesizer():
-    """Chuyển văn bản thành giọng nói bằng Microsoft Edge Neural TTS"""    
+    """Generate Vietnamese speech using Edge TTS (free, no API key needed)"""
     def synthesize(self, segments: List[SubtitleSegment]) -> List[SubtitleSegment]:
-        # TODO: Gọi API tạo giọng đọc tiếng Việt và lưu file audio cho từng segment
-        print(f"  [AI] Đang nhờ Microsoft Neural TTS đọc {len(segments)} câu tiếng Việt...")
+        print(f"  Generating TTS for {len(segments)} segments...")
         import edge_tts
         import asyncio
 
         audio_out_dir = os.path.join(TEMP_DIR, "tts_audio")
         os.makedirs(audio_out_dir, exist_ok=True)
 
-        # Hàm bất đồng bộ (async) để gọi API Microsoft
         async def _generate_audio():
             for i, seg in enumerate(segments):
                 text_to_read = seg.translated_text if seg.translated_text else seg.original_text
                 audio_filepath = os.path.join(audio_out_dir, f"seg_{i}.mp3")
                 try:
-                    # Bạn có thể đổi thành "vi-VN-NamMinhNeural" nếu muốn giọng nam
-                    # rate="+10%" để AI đọc nhanh hơn một chút, khớp với nhịp video
                     communicate = edge_tts.Communicate(
-                        text= text_to_read,
-                        voice= "vi-VN-HoaiMyNeural",
-                        rate = "+10%"
+                        text=text_to_read,
+                        voice="vi-VN-HoaiMyNeural",
+                        rate="+10%"
                     )
                     await communicate.save(audio_filepath)
                     seg.audio_path = audio_filepath
-
                 except Exception as e:
-                    print(f"⚠️ Lỗi khi tạo TTS cho câu {i}: {e}")
+                    print(f"  TTS failed for segment {i}: {e}")
                     seg.audio_path = ""
-        # Chạy luồng async để tải âm thanh về
-        asyncio.run(_generate_audio())
 
+        asyncio.run(_generate_audio())
         return segments
 
+
 class AudioMixer():
-    """Mix giọng đọc mới với nhạc nền và giọng gốc (Voice-over)"""
-    
-    # Đã thêm tham số vocal_path vào đây
+    """Mix dubbed voice + background music + original voice"""
     def mix_dubbing_with_background(self, segments: List[SubtitleSegment], bgm_path: str, vocal_path: str) -> str:
-        print("  [AI] Đang ghép nối lồng tiếng, nhạc nền và giọng gốc...")
+        print("  Mixing audio tracks...")
         from pydub import AudioSegment
-        # 1. Load các track âm thanh
+
         bgm = AudioSegment.from_file(bgm_path)
         original_vocal = AudioSegment.from_file(vocal_path)
 
-        # Mẹo Kỹ sư: Trong thư viện pydub, giảm 10dB (decibel) tương đương với việc giảm đi một nửa (50%) âm lượng cảm nhận bằng tai người.
+        # lower the volume so they don't overpower the dubbed voice
         bgm = bgm - 10
-        original_vocal = original_vocal - 12    # Giảm giọng gốc sâu hơn một chút để nó chỉ làm nền
+        original_vocal = original_vocal - 12
 
-        # Trộn nhạc nền và giọng gốc lại thành một cái "Nền tổng hợp"
         base_track = bgm.overlay(original_vocal)
-
-        # 2. Tạo một track lồng tiếng "trống" cho giọng tiếng Việt
         dub_track = AudioSegment.silent(duration=len(base_track))
 
         for i, seg in enumerate(segments):
             if not seg.audio_path or not os.path.exists(seg.audio_path):
                 continue
-                
             voice = AudioSegment.from_file(seg.audio_path)
             insert_position_ms = int(seg.start_time * 1000)
-            dub_track = dub_track.overlay(voice, position= insert_position_ms)
-        
-        # 3. Trộn (mix) track giọng tiếng Việt lên trên cùng
-        final_mix = base_track.overlay(dub_track)
+            dub_track = dub_track.overlay(voice, position=insert_position_ms)
 
-        # 4. Xuất file hoàn chỉnh
+        final_mix = base_track.overlay(dub_track)
         output_path = os.path.join(TEMP_DIR, "final_dubbing_mix.wav")
         final_mix.export(output_path, format="wav")
-
         return output_path
 
 
-
-
 class DubbingApp():
-    """Nhạc trưởng điều phối toàn bộ hệ thống"""
-    def __init__(self, model_name : str):
-        # Khởi tạo các module (Dependency Injection)
+    """Main app - runs the full dubbing pipeline"""
+    def __init__(self, model_name: str):
         self.media_processor = MediaProcessor()
         self.separator = AudioSeparator()
         self.recognizer = SpeechRecognizer()
         self.synthesizer = VoiceSynthesizer()
         self.mixer = AudioMixer()
+        self.translator = Translator(model_name=model_name)
 
-        self.translator = Translator(model_name = model_name)
-    
-    # THÊM HÀM NÀY VÀO ĐỂ LÀM LAO CÔNG
     def clean_temp_workspace(self):
-        """Xóa sạch và tạo lại thư mục temp trống rỗng"""
+        """Wipe temp folder to avoid leftover files from previous runs"""
         from config import TEMP_DIR
-        import os
-
-        # Nếu thư mục temp đang có, xóa tận gốc nó đi
         if os.path.exists(TEMP_DIR):
-            shutil.rmtree(TEMP_DIR, ignore_errors= True)
-        
-        # Xây lại một cái temp mới, sạch sẽ 100%
-        os.makedirs(TEMP_DIR, exist_ok= True)
-        print("  🧹 [Hệ thống] Đã dọn dẹp sạch sẽ không gian làm việc (Temp).")
+            shutil.rmtree(TEMP_DIR, ignore_errors=True)
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        print("  Workspace cleaned.")
 
-    
     def process_video(self, input_video_path: str, output_video_path: str):
         from config import TEMP_DIR
-        import os
 
-        print("\n🎬 BẮT ĐẦU QUÁ TRÌNH LỒNG TIẾNG TỰ ĐỘNG...")
-
-        # 1. TRƯỚC KHI CHẠY: Dọn rác từ những lần chạy lỗi trước (nếu có)
+        print("\nStarting dubbing pipeline...")
         self.clean_temp_workspace()
 
-        print("1. Đang tách âm thanh gốc từ video...")
-        # Lỗi cũ: Thiếu đường dẫn lưu file đầu ra. Đã sửa:
+        print("1. Extracting audio...")
         temp_audio = os.path.join(TEMP_DIR, "extracted_audio.wav")
         audio_path = self.media_processor.extact_audio(input_video_path, temp_audio)
-        
-        
-        print("2. Đang tách giọng nói và nhạc nền (Demucs)...")
+
+        print("2. Separating vocals and background (Demucs)...")
         vocal_path, bgm_path = self.separator.separate(audio_path)
 
-        print("3. Đang bóc băng ghi âm (Whisper)...")
+        print("3. Transcribing speech (Whisper)...")
         segments = self.recognizer.transcribe(vocal_path)
-        
-        print("4. Đang dịch thuật sang tiếng Việt...")
+
+        print("4. Translating to Vietnamese...")
         segments = self.translator.translate_segments(segments)
-        
-        print("5. Đang tạo giọng đọc tiếng Việt (TTS)...")
+
+        print("5. Generating subtitles (.srt)...")
+        srt_output = os.path.splitext(output_video_path)[0] + ".srt"
+        generate_srt(segments, srt_output)
+        print(f"   Saved: {srt_output}")
+
+        print("6. Generating Vietnamese voice (TTS)...")
         segments = self.synthesizer.synthesize(segments)
-        
-        print("6. Đang mix âm thanh lồng tiếng, nhạc nền và giọng gốc...")
+
+        print("7. Mixing audio...")
         final_audio_path = self.mixer.mix_dubbing_with_background(segments, bgm_path, vocal_path)
-        
-        print("7. Đang xuất video hoàn chỉnh...")
+
+        print("8. Exporting final video...")
         self.media_processor.merge_audio_to_video(input_video_path, final_audio_path, output_video_path)
-        
+
         self.clean_temp_workspace()
-
-        print(f"\n🎉 HOÀN THÀNH! Video lồng tiếng đã được lưu tại: {output_video_path}")
-
-
-
-
-
-
-
+        print(f"\nDone! Output: {output_video_path}")
 
 
 def main():
-    # Định nghĩa tên model chính xác
     MODEL_NAME = "gemma4:e4b"
-
-    # Tự động chuẩn bị "não" AI
     SetupManager.ensure_model_ready(MODEL_NAME)
 
-    # Nhận đường dẫn video từ người dùng
-    video_input = input("Nhập đường dẫn video đầu vào: ").strip()
+    video_input = input("Enter video path: ").strip()
     validate_video_file(video_input)
 
-    # Tự động tạo đường dẫn file output
     output_path = os.path.join(OUTPUT_DIR, "dubbed_output.mp4")
-
-    # Khởi động ứng dụng và chạy pipeline
     app = DubbingApp(model_name=MODEL_NAME)
     app.process_video(video_input, output_path)
 

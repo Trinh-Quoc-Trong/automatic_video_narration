@@ -1,12 +1,9 @@
-from io import text_encoding
-import project 
+import project
 import pytest
-from unittest.mock import patch, MagicMock
 import os
 
-# Test case 1: test hàm format_timestamp 
+
 def test_format_timestamp():
-    # 0 giây phải ra 00:00:00,000
     assert project.format_timestamp(0) == "00:00:00,000"
     assert project.format_timestamp(65) == "00:01:05,000"
     assert project.format_timestamp(65.5) == "00:01:05,500"
@@ -15,120 +12,78 @@ def test_format_timestamp():
 
 
 def test_format_timestamp_negative():
-    # test khi thời gian bị âm
     with pytest.raises(ValueError):
         project.format_timestamp(-1)
     with pytest.raises(ValueError):
         project.format_timestamp(-90000000000000)
 
+
 def test_validate_video_file(tmp_path):
-    # test chuyen file vao
+    # valid file
     fake_file = tmp_path / "fake.avi"
-    fake_file.write_text("trong dep trai")
+    fake_file.write_text("test content")
     assert project.validate_video_file(fake_file) == True
-    
-    
+
+    # wrong extension
     fake_file = tmp_path / "fake.txt"
-    fake_file.write_text("trong dep trai")
-    
+    fake_file.write_text("test content")
     with pytest.raises(ValueError):
         project.validate_video_file(fake_file)
-        
-        
-    fake_file_none = tmp_path / "fake.mp4" 
-    
+
+    # file doesn't exist
+    fake_file_none = tmp_path / "fake.mp4"
     with pytest.raises(ValueError):
         project.validate_video_file(fake_file_none)
 
+
 def test_validate_video_file_empty(tmp_path):
-    """Test file video rỗng (0 bytes) phải raise ValueError"""
     empty_file = tmp_path / "empty.mp4"
     empty_file.write_bytes(b"")
     with pytest.raises(ValueError):
         project.validate_video_file(str(empty_file))
 
-        
-def test_generate_srt_success(tmp_path):
-    # 1. Định nghĩa đường dẫn file srt sẽ được lưu trong thư mục tạm
-    output_file = tmp_path / "test.srt"
 
+def test_generate_srt_success(tmp_path):
+    output_file = tmp_path / "test.srt"
     fake_segments = [
         project.SubtitleSegment(
-          start_time= 1.5,
-          end_time=3.5,
-          original_text="hello world",  
-          translated_text="xin chào thế giới",
-          audio_path=""
+            start_time=1.5,
+            end_time=3.5,
+            original_text="hello world",
+            translated_text="xin chào thế giới",
+            audio_path=""
         ),
-        
     ]
-    # 3. Gọi hàm thực thi
     result = project.generate_srt(fake_segments, str(output_file))
-
-    # 4. Kiểm chứng (Assert)
     assert os.path.isfile(result)
-    
-    with open(result, 'r', encoding= "utf-8") as f:
-        text_encoding = f.read()
-    
-    assert text_encoding == f"1\n00:00:01,500 --> 00:00:03,500\nxin chào thế giới\n\n"
+
+    with open(result, 'r', encoding="utf-8") as f:
+        content = f.read()
+    assert content == "1\n00:00:01,500 --> 00:00:03,500\nxin chào thế giới\n\n"
+
 
 def test_generate_srt_lack_translated_text(tmp_path):
-    """
-    kiểm tra xem thiếu thuộc tính thì chuyện gì xẩy ra 
-    """
-    # 1. Định nghĩa đường dẫn file srt sẽ được lưu trong thư mục tạm
+    """When translated_text is empty, should fall back to original_text"""
     output_file = tmp_path / "test.srt"
-
     fake_segments = [
         project.SubtitleSegment(
-          start_time= 1.5,
-          end_time=3.5,
-          original_text="hello world",  
-          translated_text="",
-          audio_path=""
+            start_time=1.5,
+            end_time=3.5,
+            original_text="hello world",
+            translated_text="",
+            audio_path=""
         ),
-        
     ]
-    # 3. Gọi hàm thực thi
     result = project.generate_srt(fake_segments, str(output_file))
-
-    # 4. Kiểm chứng (Assert)
     assert os.path.isfile(result)
-    
-    with open(result, 'r', encoding= "utf-8") as f:
-        context = f.read()
-    
-    assert context == "1\n00:00:01,500 --> 00:00:03,500\nhello world\n\n"
 
-
+    with open(result, 'r', encoding="utf-8") as f:
+        content = f.read()
+    assert content == "1\n00:00:01,500 --> 00:00:03,500\nhello world\n\n"
 
 
 def test_generate_srt_lack_end_time(tmp_path):
-    """
-    kiểm tra xem thiếu thuộc tính thì chuyện gì xẩy ra 
-    """
-    # 1. Định nghĩa đường dẫn file srt sẽ được lưu trong thư mục tạm
+    """Empty segment list should raise ValueError"""
     output_file = tmp_path / "test.srt"
-
-    fake_segments = [
- 
-    ]
-
     with pytest.raises(ValueError):
-        project.generate_srt(fake_segments, str(output_file))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# pytest test_project.py -v
+        project.generate_srt([], str(output_file))
