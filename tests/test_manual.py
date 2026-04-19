@@ -52,22 +52,44 @@ if file_ not in sys.path:
 # --- ĐANG TEST: AI FASTER-WHISPER (STT) ---
 # ======================================================
 
-print("\n--- TEST AI FASTER-WHISPER (STT) ---")
+# print("\n--- TEST AI FASTER-WHISPER (STT) ---")
 
-from config import TEMP_DIR
-from project import SpeechRecognizer
+# from config import TEMP_DIR
+# from project import SpeechRecognizer
 
-vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", "test_audio", "vocals.wav")
-rec = SpeechRecognizer()
-segment = rec.transcribe(vocal_path)
-print("\n✅ AI ĐÃ NGHE XONG! KẾT QUẢ:")
+# vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", "test_audio", "vocals.wav")
+# rec = SpeechRecognizer()
+# segment = rec.transcribe(vocal_path)
+# print("\n✅ AI ĐÃ NGHE XONG! KẾT QUẢ:")
 
-for s in segment:
-    print(f"[{s.start_time: .1f}s - {s.end_time: .1f}s] {s.original_text}")
+# for s in segment:
+#     print(f"[{s.start_time: .1f}s - {s.end_time: .1f}s] {s.original_text}")
     
 
 
 
+# ======================================================
+# --- ĐANG TEST: AI OLLAMA (DỊCH THUẬT VỚI GEMMA 4) ---
+# ======================================================
+print("\n--- TEST AI OLLAMA (TRANSLATION) ---")
 
+from project import Translator, SubtitleSegment, SetupManager
 
+# Đảm bảo model đã được tải về trước khi test
+MODEL_NAME = "gemma4:e4b"
+SetupManager.ensure_model_ready(MODEL_NAME)
+
+# Dữ liệu giả lập (Mock data)
+test_segments = [
+    SubtitleSegment(0, 3.5, "In this video, we will explore the power of RTX 3060.", ""),
+    SubtitleSegment(4, 8, "It is an incredible GPU for local AI research.", "")
+]
+
+t = Translator(model_name= MODEL_NAME)
+result = t.translate_segments(test_segments)
+
+print("\n✅ KẾT QUẢ DỊCH THUẬT:")
+for s in result:
+    print(f"🇬🇧 EN: {s.original_text}")
+    print(f"🇻🇳 VI: {s.translated_text}\n")
 

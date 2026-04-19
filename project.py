@@ -1,5 +1,6 @@
 import os
 import sys
+import webbrowser
 # THÊM DÒNG NÀY VÀO ĐỂ SỬA LỖI ĐỤNG ĐỘ OPENMP
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -8,7 +9,7 @@ from multiprocessing.sharedctypes import Value
 import subprocess
 from typing import List
 from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
-
+import re
 from numpy import divide
 from config import  ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
 
@@ -55,6 +56,37 @@ class MediaProcessor():
         except Exception as e:
             raise RuntimeError(f"Error: {e}")
             
+
+class SetupManager:
+    """Tự động kiểm tra và thiết lập môi trường cho người dùng mới"""
+    @staticmethod
+    def ensure_model_ready(model_name: str):
+        print(f"--- Đang kiểm tra tài nguyên hệ thống ---")
+        try:
+            # Kiểm tra danh sách model hiện có trong Ollama
+            result = subprocess.run(["ollama","list"], capture_output = True, text = True)
+            
+            if model_name not in result.stdout:
+                print(f"⚠️ Không tìm thấy {model_name}. Đang tự động tải về (lần đầu)...")
+                subprocess.run(["ollama", 'pull', model_name], check=True)
+                print(f"✅ Tải thành công {model_name}!")
+            else:
+                print(f"✅ Model {model_name} đã sẵn sàng.")
+                
+                
+        except FileNotFoundError:
+            print("\n❌ HỆ THỐNG THIẾU PHẦN MỀM LÕI!")
+            print("Máy tính của bạn chưa được cài đặt Ollama.")
+            print("Đang tự động mở trình duyệt để bạn tải về...")
+            # Tự động bật Chrome/Edge truy cập thẳng vào trang tải Ollama
+            webbrowser.open("https://ollama.com/download")          
+            raise RuntimeError(
+                "\n--- HƯỚNG DẪN CÀI ĐẶT ---\n"
+                "1. Hãy tải và cài đặt Ollama từ trang web vừa mở.\n"
+                "2. QUAN TRỌNG: Cài xong, hãy TẮT và MỞ LẠI VS Code (hoặc Terminal) này.\n"
+                "3. Chạy lại lệnh python project.py để tiếp tục.\n"
+                "---------------------------"
+                )
 
 
 
@@ -164,9 +196,35 @@ class SpeechRecognizer():
 
 class Translator():
     """Dịch văn bản"""
+    def __init__(self, model_name : str):
+        self.model_name = model_name 
+
     def translate_segments(self, segments: List[SubtitleSegment]) -> List[SubtitleSegment]:
-        # TODO: Gọi API dịch (Google/DeepL/OpenAI)
-        pass
+        # TODO: Dịch văn bản bằng Gemma 4 (Local)
+        print(f"  [AI] Đang nhờ Gemma 4 (e4b) dịch {len(segments)} câu sang tiếng Việt...")
+        import ollama # Import nội bộ để tiết kiệm RAM khi khởi động
+        
+        for seg in segments:
+            response = ollama.chat(model=self.model_name, messages=[
+                {
+                    "role": "system",
+                    "content": "Bạn là một dịch giả chuyên nghiệp. Dịch câu tiếng Anh sang tiếng Việt tự nhiên. Chỉ trả về bản dịch, tuyệt đối không giải thích."
+                },
+                {
+                    "role": "user",
+                    "content": seg.original_text
+                }
+            ])
+            
+            raw_text = response["message"]["content"].strip()
+
+            # Lọc bỏ nội dung suy nghĩ <think>...</think> để tránh đưa vào video
+            clean_text = re.sub(r"<think>.*?</think>", '', raw_text, flags=re.DOTALL).strip()
+            
+            seg.translated_text = clean_text
+        
+        return segments
+        
 
 
 class VoiceSynthesizer():
@@ -184,7 +242,7 @@ class AudioMixer():
 
 class DubbingApp():
     """Nhạc trưởng điều phối toàn bộ hệ thống"""
-    def __init__(self):
+    def __init__(self, model_name : str):
         # Khởi tạo các module (Dependency Injection)
         self.media_processor = MediaProcessor()
         self.separator = AudioSeparator()
@@ -192,6 +250,8 @@ class DubbingApp():
         self.translator = Translator()
         self.synthesizer = VoiceSynthesizer()
         self.mixer = AudioMixer()
+
+        self.translator = Translator(model_name = model_name)
     
     def process_video(self, input_video_path: str, output_video_path: str):
         print("1. Đang tách âm thanh...")
@@ -227,7 +287,14 @@ class DubbingApp():
 
 
 def main():
-    app = DubbingApp()
+    # Định nghĩa tên model chính xác
+    MODEL_NAME = "gemma4:e4b"
+    
+    # Tự động chuẩn bị "não" AI
+    SetupManager.ensure_model_ready(MODEL_NAME)
+    
+    # Khởi động ứng dụng
+    app = DubbingApp(model_name= MODEL_NAME)
 
 if __name__ == "__main__":
     main()
