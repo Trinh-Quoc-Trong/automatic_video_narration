@@ -1,4 +1,4 @@
-# Automatic Video Dubbing — English to Vietnamese
+# Automatic Video Dubbing - English to Vietnamese
 
 #### Video Demo: <URL_HERE>
 
