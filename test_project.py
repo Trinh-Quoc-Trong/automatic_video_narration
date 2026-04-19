@@ -40,6 +40,13 @@ def test_validate_video_file(tmp_path):
     with pytest.raises(ValueError):
         project.validate_video_file(fake_file_none)
 
+def test_validate_video_file_empty(tmp_path):
+    """Test file video rỗng (0 bytes) phải raise ValueError"""
+    empty_file = tmp_path / "empty.mp4"
+    empty_file.write_bytes(b"")
+    with pytest.raises(ValueError):
+        project.validate_video_file(str(empty_file))
+
         
 def test_generate_srt_success(tmp_path):
     # 1. Định nghĩa đường dẫn file srt sẽ được lưu trong thư mục tạm

@@ -7,13 +7,14 @@ import webbrowser
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from dataclasses import dataclass
-from multiprocessing.sharedctypes import Value
+
 import subprocess
 from typing import List
 from moviepy import VideoFileClip, AudioFileClip  # MoviePy v2 API
 import re
-from numpy import divide
+
 from config import  ROOT_DIR, TEMP_DIR, TEST_DIR, OUTPUT_DIR
+import shutil
 
 
 #  --- DATA CLASSES ---
@@ -149,7 +150,8 @@ class AudioSeparator():
         try: 
             # Dùng thư viện subprocess để "bấm nốt" chạy lệnh terminal y hệt như bạn vừa gõ tay
             subprocess.run(
-                ["python", "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
+                [sys.executable , "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
+                check= True
             )
             
             # Lấy tên file gốc (ví dụ: "test_audio.wav" -> "test_audio")
@@ -258,16 +260,51 @@ class VoiceSynthesizer():
 
                 except Exception as e:
                     print(f"⚠️ Lỗi khi tạo TTS cho câu {i}: {e}")
-                    se.audio_path = ""
+                    seg.audio_path = ""
         # Chạy luồng async để tải âm thanh về
         asyncio.run(_generate_audio())
 
         return segments
 
 class AudioMixer():
-    """Mix giọng đọc mới với nhạc nền cũ"""
-    def mix_dubbing_with_background(self, segment: List[SubtitleSegment], bgm_path: str) -> str:
-        pass
+    """Mix giọng đọc mới với nhạc nền và giọng gốc (Voice-over)"""
+    
+    # Đã thêm tham số vocal_path vào đây
+    def mix_dubbing_with_background(self, segments: List[SubtitleSegment], bgm_path: str, vocal_path: str) -> str:
+        print("  [AI] Đang ghép nối lồng tiếng, nhạc nền và giọng gốc...")
+        from pydub import AudioSegment
+        # 1. Load các track âm thanh
+        bgm = AudioSegment.from_file(bgm_path)
+        original_vocal = AudioSegment.from_file(vocal_path)
+
+        # Mẹo Kỹ sư: Trong thư viện pydub, giảm 10dB (decibel) tương đương với việc giảm đi một nửa (50%) âm lượng cảm nhận bằng tai người.
+        bgm = bgm - 10
+        original_vocal = original_vocal - 12    # Giảm giọng gốc sâu hơn một chút để nó chỉ làm nền
+
+        # Trộn nhạc nền và giọng gốc lại thành một cái "Nền tổng hợp"
+        base_track = bgm.overlay(original_vocal)
+
+        # 2. Tạo một track lồng tiếng "trống" cho giọng tiếng Việt
+        dub_track = AudioSegment.silent(duration=len(base_track))
+
+        for i, seg in enumerate(segments):
+            if not seg.audio_path or not os.path.exists(seg.audio_path):
+                continue
+                
+            voice = AudioSegment.from_file(seg.audio_path)
+            insert_position_ms = int(seg.start_time * 1000)
+            dub_track = dub_track.overlay(voice, position= insert_position_ms)
+        
+        # 3. Trộn (mix) track giọng tiếng Việt lên trên cùng
+        final_mix = base_track.overlay(dub_track)
+
+        # 4. Xuất file hoàn chỉnh
+        output_path = os.path.join(TEMP_DIR, "final_dubbing_mix.wav")
+        final_mix.export(output_path, format="wav")
+
+        return output_path
+
+
 
 
 class DubbingApp():
@@ -282,15 +319,40 @@ class DubbingApp():
 
         self.translator = Translator(model_name = model_name)
     
+    # THÊM HÀM NÀY VÀO ĐỂ LÀM LAO CÔNG
+    def clean_temp_workspace(self):
+        """Xóa sạch và tạo lại thư mục temp trống rỗng"""
+        from config import TEMP_DIR
+        import os
+
+        # Nếu thư mục temp đang có, xóa tận gốc nó đi
+        if os.path.exists(TEMP_DIR):
+            shutil.rmtree(TEMP_DIR, ignore_errors= True)
+        
+        # Xây lại một cái temp mới, sạch sẽ 100%
+        os.makedirs(TEMP_DIR, exist_ok= True)
+        print("  🧹 [Hệ thống] Đã dọn dẹp sạch sẽ không gian làm việc (Temp).")
+
+    
     def process_video(self, input_video_path: str, output_video_path: str):
-        print("1. Đang tách âm thanh...")
-        audio_path = self.media_processor.extact_audio(input_video_path)
+        from config import TEMP_DIR
+        import os
+
+        print("\n🎬 BẮT ĐẦU QUÁ TRÌNH LỒNG TIẾNG TỰ ĐỘNG...")
+
+        # 1. TRƯỚC KHI CHẠY: Dọn rác từ những lần chạy lỗi trước (nếu có)
+        self.clean_temp_workspace()
+
+        print("1. Đang tách âm thanh gốc từ video...")
+        # Lỗi cũ: Thiếu đường dẫn lưu file đầu ra. Đã sửa:
+        temp_audio = os.path.join(TEMP_DIR, "extracted_audio.wav")
+        audio_path = self.media_processor.extact_audio(input_video_path, temp_audio)
         
         
-        print("2. Đang tách giọng nói và nhạc nền...")
+        print("2. Đang tách giọng nói và nhạc nền (Demucs)...")
         vocal_path, bgm_path = self.separator.separate(audio_path)
 
-        print("3. Đang nhận diện giọng nói (STT)...")
+        print("3. Đang bóc băng ghi âm (Whisper)...")
         segments = self.recognizer.transcribe(vocal_path)
         
         print("4. Đang dịch thuật sang tiếng Việt...")
@@ -299,13 +361,15 @@ class DubbingApp():
         print("5. Đang tạo giọng đọc tiếng Việt (TTS)...")
         segments = self.synthesizer.synthesize(segments)
         
-        print("6. Đang mix âm thanh lồng tiếng với nhạc nền...")
-        final_audio_path = self.mixer.mix_dubbing_with_background(segments, bgm_path)
+        print("6. Đang mix âm thanh lồng tiếng, nhạc nền và giọng gốc...")
+        final_audio_path = self.mixer.mix_dubbing_with_background(segments, bgm_path, vocal_path)
         
         print("7. Đang xuất video hoàn chỉnh...")
         self.media_processor.merge_audio_to_video(input_video_path, final_audio_path, output_video_path)
         
-        print("Hoàn thành!")
+        self.clean_temp_workspace()
+
+        print(f"\n🎉 HOÀN THÀNH! Video lồng tiếng đã được lưu tại: {output_video_path}")
 
 
 
@@ -318,12 +382,21 @@ class DubbingApp():
 def main():
     # Định nghĩa tên model chính xác
     MODEL_NAME = "gemma4:e4b"
-    
+
     # Tự động chuẩn bị "não" AI
     SetupManager.ensure_model_ready(MODEL_NAME)
-    
-    # Khởi động ứng dụng
-    app = DubbingApp(model_name= MODEL_NAME)
+
+    # Nhận đường dẫn video từ người dùng
+    video_input = input("Nhập đường dẫn video đầu vào: ").strip()
+    validate_video_file(video_input)
+
+    # Tự động tạo đường dẫn file output
+    output_path = os.path.join(OUTPUT_DIR, "dubbed_output.mp4")
+
+    # Khởi động ứng dụng và chạy pipeline
+    app = DubbingApp(model_name=MODEL_NAME)
+    app.process_video(video_input, output_path)
+
 
 if __name__ == "__main__":
     main()
