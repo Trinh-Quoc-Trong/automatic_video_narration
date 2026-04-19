@@ -6,3 +6,5 @@ pydub
 ollama
 pytest
 numpy<2
+edge-tts 
+asyncio

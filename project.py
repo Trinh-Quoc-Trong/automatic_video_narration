@@ -1,3 +1,5 @@
+import edge_tts
+from edge_tts import communicate
 import os
 import sys
 import webbrowser
@@ -228,11 +230,39 @@ class Translator():
 
 
 class VoiceSynthesizer():
-    """Chuyển văn bản thành giọng nói (TTS)"""
-    def synthesize(self, segment: List[SubtitleSegment]) -> List[SubtitleSegment]:
+    """Chuyển văn bản thành giọng nói bằng Microsoft Edge Neural TTS"""    
+    def synthesize(self, segments: List[SubtitleSegment]) -> List[SubtitleSegment]:
         # TODO: Gọi API tạo giọng đọc tiếng Việt và lưu file audio cho từng segment
-        pass
+        print(f"  [AI] Đang nhờ Microsoft Neural TTS đọc {len(segments)} câu tiếng Việt...")
+        import edge_tts
+        import asyncio
 
+        audio_out_dir = os.path.join(TEMP_DIR, "tts_audio")
+        os.makedirs(audio_out_dir, exist_ok=True)
+
+        # Hàm bất đồng bộ (async) để gọi API Microsoft
+        async def _generate_audio():
+            for i, seg in enumerate(segments):
+                text_to_read = seg.translated_text if seg.translated_text else seg.original_text
+                audio_filepath = os.path.join(audio_out_dir, f"seg_{i}.mp3")
+                try:
+                    # Bạn có thể đổi thành "vi-VN-NamMinhNeural" nếu muốn giọng nam
+                    # rate="+10%" để AI đọc nhanh hơn một chút, khớp với nhịp video
+                    communicate = edge_tts.Communicate(
+                        text= text_to_read,
+                        voice= "vi-VN-HoaiMyNeural",
+                        rate = "+10%"
+                    )
+                    await communicate.save(audio_filepath)
+                    seg.audio_path = audio_filepath
+
+                except Exception as e:
+                    print(f"⚠️ Lỗi khi tạo TTS cho câu {i}: {e}")
+                    se.audio_path = ""
+        # Chạy luồng async để tải âm thanh về
+        asyncio.run(_generate_audio())
+
+        return segments
 
 class AudioMixer():
     """Mix giọng đọc mới với nhạc nền cũ"""
@@ -247,7 +277,6 @@ class DubbingApp():
         self.media_processor = MediaProcessor()
         self.separator = AudioSeparator()
         self.recognizer = SpeechRecognizer()
-        self.translator = Translator()
         self.synthesizer = VoiceSynthesizer()
         self.mixer = AudioMixer()
 

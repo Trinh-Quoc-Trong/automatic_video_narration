@@ -93,3 +93,26 @@ for s in result:
     print(f"🇬🇧 EN: {s.original_text}")
     print(f"🇻🇳 VI: {s.translated_text}\n")
 
+
+
+
+
+
+# ======================================================
+# --- ĐANG TEST: AI MICROSOFT EDGE TTS (TẠO GIỌNG ĐỌC) ---
+# ======================================================
+print("\n--- TEST AI MICROSOFT EDGE TTS ---")
+
+from project import VoiceSynthesizer
+
+# Gọi nhạc trưởng của Bước 7
+vs = VoiceSynthesizer()
+
+# Lấy luôn kết quả (biến 'result') từ bước Dịch thuật ở ngay bên trên đưa vào đây
+tts_result = vs.synthesize(result)
+
+print("\n✅ TTS ĐÃ ĐỌC XONG! KẾT QUẢ:")
+for s in tts_result:
+    print(f"Câu: {s.translated_text}")
+    print(f"-> Đã lưu file mp3 tại: {s.audio_path}\n")
+
