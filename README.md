@@ -1,6 +1,6 @@
 # Automatic Video Dubbing - English to Vietnamese
 
-#### Video Demo: <URL_HERE>
+#### Video Demo: https://youtu.be/AaB3aZKcC8w?si=4yty2_7zHLWNoJ84
 
 ## Description
 

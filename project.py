@@ -1,4 +1,3 @@
-import edge_tts
 from edge_tts import communicate
 import os
 import sys
@@ -126,7 +125,8 @@ class AudioSeparator():
             # sys.executable so it uses the venv python, not system python
             subprocess.run(
                 [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-o", out_dir, audio_path],
-                check=True
+                check=True,
+                capture_output=True
             )
             filename = os.path.splitext(os.path.basename(audio_path))[0]
             vocal_path = os.path.join(TEMP_DIR, "separated", "htdemucs", filename, "vocals.wav")
@@ -137,7 +137,7 @@ class AudioSeparator():
             return vocal_path, bgm_path
 
         except subprocess.CalledProcessError as e:
-            error_msg = e.stderr.decode("utf-8", errors="ignore")
+            error_msg = e.stderr.decode("utf-8", errors="ignore") if e.stderr else str(e)
             raise RuntimeError(f"Demucs error: {error_msg}")
 
 
